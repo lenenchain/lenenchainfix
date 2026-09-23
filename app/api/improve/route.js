@@ -1,5 +1,8 @@
 export const runtime = 'edge';
 
+// 지연(sleep) 함수
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function POST(req) {
   const { prompt, currentCode } = await req.json();
 
@@ -23,14 +26,19 @@ export async function POST(req) {
         return;
       }
 
-      // [0단계: 입력받은 텍스트에 URL 주소가 포함되어 있다면 해당 사이트 HTML 자동 가져오기]
+      // [0단계: 입력된 텍스트에서 URL 감지 및 HTML 코드 자동 수집]
       let fetchedCode = currentCode || '';
       const urlRegex = /(https?:\/\/[^\s]+)/g;
       const foundUrls = prompt.match(urlRegex);
 
       if (foundUrls && foundUrls.length > 0) {
         const targetUrl = foundUrls[0];
-        await sendEvent(0, `입력된 웹사이트 주소(${targetUrl})에서 HTML 코드를 읽어오는 중입니다...`);         try {           const siteRes = await fetch(targetUrl);           if (siteRes.ok) {             fetchedCode = await siteRes.text();             await sendEvent(0, `성공적으로 ${targetUrl} 의 소스코드를 불러왔습니다.`);
+        await sendEvent(0, `입력된 웹사이트 주소(${targetUrl})에서 HTML 코드를 읽어오는 중입니다...`);
+        try {
+          const siteRes = await fetch(targetUrl);
+          if (siteRes.ok) {
+            fetchedCode = await siteRes.text();
+            await sendEvent(0, `성공적으로 ${targetUrl} 의 소스코드를 불러왔습니다.`);
           }
         } catch (e) {
           console.log('URL Fetch 실패:', e.message);
@@ -47,7 +55,14 @@ export async function POST(req) {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${grokKey}`             },             body: JSON.stringify({               model: 'grok-beta',               messages: [                 {                   role: 'user',                   content: `다음 요청사항을 바탕으로 웹사이트 개선을 위한 트렌디한 디자인 키워드 및 UX 가이드라인을 3줄로 요약해줘.\n요청: ${prompt}`
+              'Authorization': `Bearer ${grokKey}`
+            },
+            body: JSON.stringify({
+              model: 'grok-beta',
+              messages: [
+                {
+                  role: 'user',
+                  content: `다음 요청사항을 바탕으로 웹사이트 개선을 위한 트렌디한 디자인 키워드 및 UX 가이드라인을 3줄로 요약해줘.\n요청: ${prompt}`
                 }
               ]
             })
@@ -80,34 +95,50 @@ export async function POST(req) {
       마크다운 설명 문구나 \`\`\`html 같은 태그는 완전히 제외하고, <!DOCTYPE html>로 시작하는 순수 HTML 코드만 출력해줘.
       `;
 
+      // 사용량이 몰릴 때 대비한 다중 모델 엔드포인트 목록
       const modelEndpoints = [
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
-        'https://generativelanguage.googleapis.com/v1/models/gemini-3.6-flash:generateContent'
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+        'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent',
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
       ];
 
       let generatedCode = '';
       let lastErrorMessage = '';
 
+      // 백오프 재시도 및 모델 순회 처리 (최대 3회 재시도)
       for (const endpoint of modelEndpoints) {
-        try {
-          const response = await fetch(`${endpoint}?key=${geminiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: geminiPrompt }] }]
-            })
-          });
+        if (generatedCode) break;
 
-          const data = await response.json();
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const response = await fetch(`${endpoint}?key=${geminiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: geminiPrompt }] }]
+              })
+            });
 
-          if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-            generatedCode = data.candidates[0].content.parts[0].text;
-            break;
-          } else {
-            lastErrorMessage = data?.error?.message || 'Gemini API 응답 에러';
+            const data = await response.json();
+
+            if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+              generatedCode = data.candidates[0].content.parts[0].text;
+              break; // 성공 시 내부 루프 탈출
+            } else {
+              lastErrorMessage = data?.error?.message || 'Gemini API 응답 에러';
+              
+              // High demand/traffic 트래픽 에러 시 대기 후 재시도
+              if (lastErrorMessage.includes('high demand') || response.status === 429 || response.status === 503) {
+                await sendEvent(2, `Gemini API 대기열 지연 중... 재시도 중입니다 (${attempt}/3)`);
+                await sleep(1500 * attempt); // 1.5초, 3초 지연
+              } else {
+                break; // 다른 에러는 다음 모델 엔드포인트로 이동
+              }
+            }
+          } catch (err) {
+            lastErrorMessage = err.message;
+            await sleep(1000);
           }
-        } catch (err) {
-          lastErrorMessage = err.message;
         }
       }
 
