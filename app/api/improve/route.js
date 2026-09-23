@@ -73,11 +73,10 @@ export async function POST(req) {
       마크다운 설명 문구나 \`\`\`html 같은 태그는 완전히 제외하고, <!DOCTYPE html>로 시작하는 순수 HTML 코드만 출력해줘.
       `;
 
-      // 최신 API 모델 후보 순서 (gemini-3.6-flash 우선 시도)
+      // 최신 호환 모델 엔드포인트 순서
       const modelEndpoints = [
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
-        'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent',
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+        'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent'
       ];
 
       let generatedCode = '';
