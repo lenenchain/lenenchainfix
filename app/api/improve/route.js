@@ -60,7 +60,9 @@ export async function POST(req) {
       // [2단계: Gemini 코드 생성 (A 인계 -> B 시작)]
       await sendEvent(2, 'Grok의 분석 결과를 Gemini로 인계하여 웹 코드를 생성합니다...');
 
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
+      const genAI = new GoogleGenerativeAI(geminiKey);
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
       
       const geminiPrompt = `
       너는 세계 최고 수준의 프론트엔드 웹 개발자다.
@@ -78,12 +80,8 @@ export async function POST(req) {
       마크다운 설명 문구나 \`\`\`html 같은 태그는 완전히 제외하고, <!DOCTYPE html>로 시작하는 순수 HTML 코드만 출력해줘.
       `;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: geminiPrompt,
-      });
-
-      let generatedCode = response.text || '';
+     const response = await model.generateContent(geminiPrompt);
+      let generatedCode = response.response.text() || '';
       
       // 마크다운 태그 정제 (TEST-06 만족)
       generatedCode = generatedCode.replace(/```html/g, '').replace(/```/g, '').trim();
