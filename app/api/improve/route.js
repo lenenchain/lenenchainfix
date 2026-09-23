@@ -75,8 +75,8 @@ export async function POST(req) {
 
       // 최신 호환 모델 엔드포인트 순서
       const modelEndpoints = [
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
-        'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent'
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
+        'https://generativelanguage.googleapis.com/v1/models/gemini-3.6-flash:generateContent'
       ];
 
       let generatedCode = '';
