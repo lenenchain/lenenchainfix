@@ -73,30 +73,42 @@ export async function POST(req) {
       마크다운 설명 문구나 \`\`\`html 같은 태그는 완전히 제외하고, <!DOCTYPE html>로 시작하는 순수 HTML 코드만 출력해줘.
       `;
 
-      // REST API 직접 호출 (v1beta 404 에러 방지)
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
-      
-      let geminiRes = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: geminiPrompt }]
-            }
-          ]
-        })
-      });
+      // v1 정식 API 엔드포인트 및 다중 모델 후보 목록
+      const modelCandidates = [
+        'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent',
+        'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent',
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+      ];
 
-      let geminiData = await geminiRes.json();
+      let generatedCode = '';
+      let lastErrorMessage = '';
 
-      if (!geminiRes.ok) {
-        throw new Error(geminiData?.error?.message || 'Gemini API 호출 실패');
+      for (const endpoint of modelCandidates) {
+        try {
+          const response = await fetch(`${endpoint}?key=${geminiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: geminiPrompt }] }]
+            })
+          });
+
+          const data = await response.json();
+
+          if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            generatedCode = data.candidates[0].content.parts[0].text;
+            break; // 성공 시 반복문 탈출
+          } else {
+            lastErrorMessage = data?.error?.message || 'Gemini API 응답 오류';
+          }
+        } catch (err) {
+          lastErrorMessage = err.message;
+        }
       }
 
-      let generatedCode = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (!generatedCode) {
+        throw new Error(`Gemini API 호출 실패: ${lastErrorMessage}`);
+      }
 
       // 마크다운 태그 정제
       generatedCode = generatedCode.replace(/```html/g, '').replace(/```/g, '').trim();
