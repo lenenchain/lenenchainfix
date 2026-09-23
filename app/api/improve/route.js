@@ -23,7 +23,7 @@ export async function POST(req) {
         return;
       }
 
-      // [1단계: Grok 분석 (A 시작)]
+      // [1단계: Grok 분석]
       await sendEvent(1, 'Grok이 최신 UI/UX 트렌드 및 사용자 요구사항을 분석 중입니다...');
 
       let grokResult = '';
@@ -54,7 +54,7 @@ export async function POST(req) {
         grokResult = '기본 모던 웹 UI 디자인 가이드 적용';
       }
 
-      // [2단계: Gemini 코드 생성 (A 인계 -> B 시작)]
+      // [2단계: Gemini 코드 생성]
       await sendEvent(2, 'Grok의 분석 결과를 Gemini로 인계하여 웹 코드를 생성합니다...');
 
       const geminiPrompt = `
@@ -73,17 +73,17 @@ export async function POST(req) {
       마크다운 설명 문구나 \`\`\`html 같은 태그는 완전히 제외하고, <!DOCTYPE html>로 시작하는 순수 HTML 코드만 출력해줘.
       `;
 
-      // v1 정식 API 엔드포인트 및 다중 모델 후보 목록
-      const modelCandidates = [
-        'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent',
+      // 최신 API 모델 후보 순서 (gemini-3.6-flash 우선 시도)
+      const modelEndpoints = [
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
         'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent',
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
       ];
 
       let generatedCode = '';
       let lastErrorMessage = '';
 
-      for (const endpoint of modelCandidates) {
+      for (const endpoint of modelEndpoints) {
         try {
           const response = await fetch(`${endpoint}?key=${geminiKey}`, {
             method: 'POST',
@@ -97,9 +97,9 @@ export async function POST(req) {
 
           if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
             generatedCode = data.candidates[0].content.parts[0].text;
-            break; // 성공 시 반복문 탈출
+            break;
           } else {
-            lastErrorMessage = data?.error?.message || 'Gemini API 응답 오류';
+            lastErrorMessage = data?.error?.message || 'Gemini API 응답 에러';
           }
         } catch (err) {
           lastErrorMessage = err.message;
@@ -113,7 +113,7 @@ export async function POST(req) {
       // 마크다운 태그 정제
       generatedCode = generatedCode.replace(/```html/g, '').replace(/```/g, '').trim();
 
-      // [3단계: 완료 (B 완료)]
+      // [3단계: 완료]
       await sendEvent(3, '완료! 개선된 웹사이트가 성공적으로 생성되었습니다.', {
         grokReport: grokResult,
         finalCode: generatedCode
