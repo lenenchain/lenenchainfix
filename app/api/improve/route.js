@@ -97,9 +97,9 @@ export async function POST(req) {
 
       // 사용량이 몰릴 때 대비한 다중 모델 엔드포인트 목록
       const modelEndpoints = [
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
-        'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent',
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
+        'https://generativelanguage.googleapis.com/v1/models/gemini-3.6-flash:generateContent',
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent'
       ];
 
       let generatedCode = '';
