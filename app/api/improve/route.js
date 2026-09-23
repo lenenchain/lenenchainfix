@@ -19,7 +19,6 @@ export async function POST(req) {
 
   (async () => {
     try {
-      // TEST-08: 빈 입력 예외 처리
       if (!prompt || prompt.trim() === '') {
         await sendEvent(4, '오류: 개선 요청사항을 입력해주세요.');
         await writer.close();
@@ -61,8 +60,9 @@ export async function POST(req) {
       await sendEvent(2, 'Grok의 분석 결과를 Gemini로 인계하여 웹 코드를 생성합니다...');
 
       const genAI = new GoogleGenerativeAI(geminiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
-
+      
+      // 트래픽 과부하 방지를 위해 Pro 모델 사용
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
       
       const geminiPrompt = `
       너는 세계 최고 수준의 프론트엔드 웹 개발자다.
@@ -80,10 +80,24 @@ export async function POST(req) {
       마크다운 설명 문구나 \`\`\`html 같은 태그는 완전히 제외하고, <!DOCTYPE html>로 시작하는 순수 HTML 코드만 출력해줘.
       `;
 
-     const response = await model.generateContent(geminiPrompt);
+      // 503(과부하) 발생 시 최대 3회 자동 재시도 로직
+      let response = null;
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          response = await model.generateContent(geminiPrompt);
+          break; // 성공 시 루프 탈출
+        } catch (err) {
+          retries -= 1;
+          if (retries === 0) throw err; // 3회 모두 실패 시 에러 던짐
+          await sendEvent(2, `Gemini 서버 트래픽 지연으로 재시도 중입니다... (남은 재시도: ${retries}회)`);
+          await new Promise((res) => setTimeout(res, 2000)); // 2초 대기 후 재시도
+        }
+      }
+
       let generatedCode = response.response.text() || '';
       
-      // 마크다운 태그 정제 (TEST-06 만족)
+      // 마크다운 태그 정제
       generatedCode = generatedCode.replace(/```html/g, '').replace(/```/g, '').trim();
 
       // [3단계: 완료 (B 완료)]
